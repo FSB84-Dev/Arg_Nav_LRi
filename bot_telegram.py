@@ -4,55 +4,50 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from config import TELEGRAM_BOT_TOKEN
 from flujo_reuniones import procesar_audio_reunion, formatear_confirmacion
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            await update.message.reply_text(
-                            "Bot Automatizacion Comercial\n\nAragon - Navarra - La Rioja\n\n"
-                            "Opciones:\n/help - Ayuda\nEnvia audio de reunion\nEscribe una tarea"
-            )
+    await update.message.reply_text("Bot Comercial Aragon-Navarra-LaRioja\n/help para ayuda")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            await update.message.reply_text(
-                            "Ayuda\n\nAudio: Graba y envia, se transcribe automaticamente\n"
-                            "Tarea: Escribe, aparece en Trello\nLicitaciones: Alertas cada manana"
-            )
+    await update.message.reply_text("Envia audio de reunion o escribe una tarea")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            logger.info(f"Mensaje: {update.message.text}")
-            await update.message.reply_text("Mensaje recibido. Funcionalidad de tareas proximamente.")
+    await update.message.reply_text("Mensaje recibido.")
+
+
+async def descargar_audio(update: Update):
+    if update.message.voice:
+        f = await update.message.voice.get_file()
+        d = update.message.voice.duration
+        b = await f.download_as_bytearray()
+        return bytes(b), d
+    elif update.message.audio:
+        f = await update.message.audio.get_file()
+        d = update.message.audio.duration or 0
+        b = await f.download_as_bytearray()
+        return bytes(b), d
+    return None, 0
 
 
 async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-            logger.info("Audio recibido")
-            await update.message.reply_text("Audio recibido. Procesando...")
-            try:
-                            if update.message.voice:
-                                                file_obj = await update.message.voice.get_file()
-                                                duracion = update.message.voice.duration
-elif update.message.audio:
-            file_obj = await update.message.audio.get_file()
-            duracion = update.message.audio.duration or 0
-else:
-            await update.message.reply_text("Formato no reconocido.")
-                    return
-        audio_bytes = await file_obj.download_as_bytearray()
-        resultado = await procesar_audio_reunion(bytes(audio_bytes), duracion=duracion)
-        if resultado["ok"]:
-                            await update.message.reply_text(formatear_confirmacion(resultado))
-else:
-            await update.message.reply_text(f"Error: {resultado.get('error', 'desconocido')}")
-except Exception as e:
-        logger.error(f"Error: {e}")
-        await update.message.reply_text("Error inesperado. Intenta de nuevo.")
+    await update.message.reply_text("Audio recibido. Procesando...")
+    audio, dur = await descargar_audio(update)
+    if audio is None:
+        await update.message.reply_text("Formato no reconocido.")
+        return
+    resultado = await procesar_audio_reunion(audio, duracion=dur)
+    if resultado["ok"]:
+        await update.message.reply_text(formatear_confirmacion(resultado))
+    else:
+        await update.message.reply_text("Error procesando audio.")
 
 
 def main():
-            logger.info("Bot iniciando...")
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -63,4 +58,4 @@ def main():
 
 
 if __name__ == "__main__":
-            main()
+    main()
