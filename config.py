@@ -4,7 +4,7 @@ import os
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Claude API
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "").strip().strip('"').strip("'")
 
 # GitHub
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
