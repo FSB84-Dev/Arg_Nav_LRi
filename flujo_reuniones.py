@@ -7,6 +7,7 @@ from datetime import datetime
 from openai import OpenAI
 from config import CLAUDE_API_KEY, OPENAI_API_KEY
 from router import decidir_ruta_audio
+from google_sheets import guardar_reunion, buscar_empresa_abierta, get_hoja
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,7 @@ async def transcribir_con_whisper(audio_bytes: bytes) -> str:
 async def extraer_datos_con_claude(transcripcion: str, modelo: str) -> dict:
     client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
     fecha_hoy = datetime.now().strftime("%d/%m/%Y")
-    prompt = PROMPT_EXTRACCION.format(
-        transcripcion=transcripcion,
-        fecha_hoy=fecha_hoy
-    )
+    prompt = PROMPT_EXTRACCION.format(transcripcion=transcripcion, fecha_hoy=fecha_hoy)
     respuesta = client.messages.create(
         model=modelo,
         max_tokens=1024,
@@ -87,6 +85,18 @@ async def procesar_audio_reunion(audio_bytes: bytes, duracion: int = 0) -> dict:
         datos = await extraer_datos_con_claude(transcripcion, modelo)
         datos["fecha_procesado"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         datos["transcripcion"] = transcripcion
+
+        # Guardar en Google Sheets
+        logger.info("INFO:flujo_reuniones:Guardando en Google Sheets...")
+        resultado_sheets = guardar_reunion(datos)
+        if resultado_sheets["ok"]:
+            logger.info(f"INFO:flujo_reuniones:Guardado con ID {resultado_sheets['id']}")
+            datos["sheets_id"] = resultado_sheets["id"]
+            datos["operacion_existente"] = resultado_sheets.get("operacion_existente", False)
+            datos["reg_existente"] = resultado_sheets.get("reg_existente")
+        else:
+            logger.error(f"Error guardando en Sheets: {resultado_sheets.get('error')}")
+
         return {"ok": True, "datos": datos}
     except Exception as e:
         logger.error(f"Error procesando audio: {e}")
@@ -95,14 +105,15 @@ async def procesar_audio_reunion(audio_bytes: bytes, duracion: int = 0) -> dict:
 
 def formatear_confirmacion(resultado: dict) -> str:
     d = resultado.get("datos", {})
+    sheets_id = d.get("sheets_id", "?")
     lineas = [
-        "Reunion registrada",
+        f"Reunion registrada (ID: {sheets_id})",
         "",
         f"Empresa: {d.get('empresa', 'No detectada')}",
         f"Contacto: {d.get('contacto', 'No detectado')}",
         f"Fecha reunion: {d.get('fecha_reunion', 'No indicada')}",
         f"Tipo: {d.get('tipo', 'Objetivo')}",
-        f"Linea: {d.get('linea', 'No especificada')}",
+        f"Linea: {d.get('linea') or 'No especificada'}",
         f"Estado: {d.get('estado_lead', 'Nuevo')}",
         "",
         f"Resumen: {d.get('resumen', '')}",
@@ -113,4 +124,6 @@ def formatear_confirmacion(resultado: dict) -> str:
         lineas.append(f"Objeciones: {d.get('objeciones')}")
     if d.get("productos"):
         lineas.append(f"Productos: {d.get('productos')}")
+    lineas.append("")
+    lineas.append("Guardado en Google Sheets")
     return "\n".join(lineas)
