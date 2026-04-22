@@ -70,7 +70,7 @@ async def extraer_datos_con_claude(transcripcion: str, modelo: str) -> dict:
 async def procesar_audio_reunion(audio_bytes: bytes, duracion: int = 0) -> dict:
     ruta = decidir_ruta_audio(duracion_segundos=duracion, tamano_bytes=len(audio_bytes))
     logger.info(f"INFO:flujo_reuniones:Ruta seleccionada: {ruta}")
-    modelo = "claude-haiku-20240307" if ruta == "simple" else "claude-sonnet-4-5"
+    modelo = "claude-haiku-4-5" if ruta == "simple" else "claude-sonnet-4-5"
     try:
         logger.info("Transcribiendo audio con Whisper...")
         transcripcion = await transcribir_con_whisper(audio_bytes)
