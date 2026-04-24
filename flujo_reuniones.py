@@ -75,31 +75,44 @@ async def extraer_datos_con_claude(transcripcion: str, modelo: str) -> dict:
 
 async def procesar_audio_reunion(audio_bytes: bytes, duracion: int = 0) -> dict:
     ruta = decidir_ruta_audio(duracion_segundos=duracion, tamano_bytes=len(audio_bytes))
-    logger.info(f"INFO:flujo_reuniones:Ruta seleccionada: {ruta}")
+    logger.info(f"=== PROCESANDO AUDIO REUNIÓN ===")
+    logger.info(f"Ruta seleccionada: {ruta}")
+    logger.info(f"Duración: {duracion}s, Tamaño: {len(audio_bytes)} bytes")
     modelo = "claude-haiku-4-5" if ruta == "simple" else "claude-sonnet-4-5"
+    logger.info(f"Modelo Claude: {modelo}")
+    
     try:
-        logger.info("INFO:flujo_reuniones:Transcribiendo audio con Whisper...")
+        logger.info("PASO 1: Transcribiendo audio con Whisper...")
         transcripcion = await transcribir_con_whisper(audio_bytes)
-        logger.info(f"INFO:flujo_reuniones:Transcripcion OK: {transcripcion[:80]}...")
-        logger.info("INFO:flujo_reuniones:Extrayendo datos con Claude...")
+        logger.info(f"✅ Transcripción completada ({len(transcripcion)} caracteres)")
+        logger.info(f"Preview transcripción: {transcripcion[:100]}...")
+        
+        logger.info("PASO 2: Extrayendo datos con Claude...")
         datos = await extraer_datos_con_claude(transcripcion, modelo)
+        logger.info(f"✅ Datos extraídos: {json.dumps(datos, indent=2, ensure_ascii=False)}")
+        
         datos["fecha_procesado"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         datos["transcripcion"] = transcripcion
 
         # Guardar en Google Sheets
-        logger.info("INFO:flujo_reuniones:Guardando en Google Sheets...")
+        logger.info("PASO 3: Guardando en Google Sheets...")
         resultado_sheets = guardar_reunion(datos)
+        
         if resultado_sheets["ok"]:
-            logger.info(f"INFO:flujo_reuniones:Guardado con ID {resultado_sheets['id']}")
+            logger.info(f"✅ ÉXITO: Guardado con ID {resultado_sheets['id']}")
             datos["sheets_id"] = resultado_sheets["id"]
             datos["operacion_existente"] = resultado_sheets.get("operacion_existente", False)
             datos["reg_existente"] = resultado_sheets.get("reg_existente")
         else:
-            logger.error(f"Error guardando en Sheets: {resultado_sheets.get('error')}")
+            logger.error(f"❌ ERROR guardando en Sheets: {resultado_sheets.get('error')}")
+            logger.error("El proceso continuará pero los datos NO están en Sheets")
 
+        logger.info("=== FIN PROCESAMIENTO AUDIO ===")
         return {"ok": True, "datos": datos}
+        
     except Exception as e:
-        logger.error(f"Error procesando audio: {e}")
+        logger.error(f"❌ ERROR CRÍTICO procesando audio: {e}", exc_info=True)
+        logger.error(f"Tipo de error: {type(e).__name__}")
         return {"ok": False, "error": str(e)}
 
 

@@ -37,9 +37,17 @@ def get_hoja():
 
 
 def get_siguiente_id(hoja):
-    valores = hoja.col_values(1)
-    numeros = [int(v) for v in valores[1:] if v.isdigit()]
-    return max(numeros) + 1 if numeros else 1
+    try:
+        logger.info("Obteniendo siguiente ID desde columna A...")
+        valores = hoja.col_values(1)
+        logger.info(f"Valores encontrados en columna A: {len(valores)} total")
+        numeros = [int(v) for v in valores[1:] if v.isdigit()]
+        siguiente = max(numeros) + 1 if numeros else 1
+        logger.info(f"Siguiente ID calculado: {siguiente}")
+        return siguiente
+    except Exception as e:
+        logger.error(f"Error obteniendo siguiente ID: {e}", exc_info=True)
+        raise
 
 
 def buscar_empresa_abierta(hoja, empresa):
@@ -53,11 +61,25 @@ def buscar_empresa_abierta(hoja, empresa):
 
 def guardar_reunion(datos: dict) -> dict:
     try:
+        logger.info("=== INICIANDO GUARDADO EN GOOGLE SHEETS ===")
+        logger.info(f"Datos recibidos: {json.dumps(datos, indent=2, ensure_ascii=False)}")
+        
+        logger.info("Conectando a Google Sheets...")
         hoja = get_hoja()
+        logger.info(f"Conectado a hoja: {hoja.title}")
+        
         empresa = datos.get("empresa", "")
+        logger.info(f"Buscando operaciones abiertas para empresa: '{empresa}'")
         fila_existente, reg_existente = buscar_empresa_abierta(hoja, empresa)
+        
+        if fila_existente:
+            logger.info(f"⚠️ Operación abierta encontrada en fila {fila_existente}: {reg_existente}")
+        else:
+            logger.info("✅ No hay operaciones abiertas para esta empresa")
+        
         siguiente_id = get_siguiente_id(hoja)
         fecha_hoy = datetime.now().strftime("%d/%m/%Y")
+        
         nueva_fila = [
             siguiente_id,
             datos.get("fecha_reunion") or fecha_hoy,
@@ -72,8 +94,15 @@ def guardar_reunion(datos: dict) -> dict:
             datos.get("productos", ""),
             "", "", "", "No", "", "", "", "", "", "Abierta"
         ]
+        
+        logger.info(f"Fila a insertar ({len(nueva_fila)} columnas): {nueva_fila[:6]}...")
+        logger.info("Ejecutando append_row...")
+        
         hoja.append_row(nueva_fila)
-        logger.info(f"Reunion guardada en Sheets con ID {siguiente_id}")
+        
+        logger.info(f"✅ Reunion guardada exitosamente en Sheets con ID {siguiente_id}")
+        logger.info("=== FIN GUARDADO GOOGLE SHEETS ===")
+        
         return {
             "ok": True,
             "id": siguiente_id,
@@ -81,7 +110,9 @@ def guardar_reunion(datos: dict) -> dict:
             "reg_existente": reg_existente
         }
     except Exception as e:
-        logger.error(f"Error guardando en Sheets: {e}")
+        logger.error(f"❌ ERROR CRÍTICO guardando en Sheets: {e}", exc_info=True)
+        logger.error(f"Tipo de error: {type(e).__name__}")
+        logger.error(f"Datos que causaron el error: {json.dumps(datos, ensure_ascii=False)}")
         return {"ok": False, "error": str(e)}
 
 
