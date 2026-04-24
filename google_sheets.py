@@ -51,12 +51,37 @@ def get_siguiente_id(hoja):
 
 
 def buscar_empresa_abierta(hoja, empresa):
-    registros = hoja.get_all_records()
-    for i, reg in enumerate(registros):
-        if (reg.get("Empresa", "").lower() == empresa.lower() and
-                reg.get("Estado_Operacion", "").lower() == "abierta"):
-            return i + 2, reg  # +2 por header y 0-index
-    return None, None
+    try:
+        # get_all_values() es más seguro que get_all_records() para hojas vacías
+        all_values = hoja.get_all_values()
+        
+        # Si solo hay header (1 fila) o está vacía, no hay registros
+        if len(all_values) <= 1:
+            logger.info("✅ Hoja vacía (solo headers), no hay operaciones abiertas")
+            return None, None
+        
+        # Convertir a records manualmente
+        headers = all_values[0]
+        registros = []
+        for row_idx, row in enumerate(all_values[1:], start=2):  # start=2 porque fila 1 es header
+            if len(row) > 0 and any(row):  # Skip filas completamente vacías
+                record = {headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))}
+                registros.append((row_idx, record))
+        
+        # Buscar empresa con operación abierta
+        for fila_num, reg in registros:
+            if (reg.get("Empresa", "").lower() == empresa.lower() and
+                    reg.get("Estado_Operacion", "").lower() == "abierta"):
+                logger.info(f"⚠️ Operación abierta encontrada en fila {fila_num}")
+                return fila_num, reg
+        
+        logger.info("✅ No hay operaciones abiertas para esta empresa")
+        return None, None
+        
+    except Exception as e:
+        logger.error(f"Error buscando empresa abierta: {e}", exc_info=True)
+        # En caso de error, devolver None y continuar (mejor crear duplicado que fallar)
+        return None, None
 
 
 def guardar_reunion(datos: dict) -> dict:
